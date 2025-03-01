@@ -5,6 +5,7 @@ import com.acmerobotics.dashboard.FtcDashboard;
 import com.acmerobotics.dashboard.telemetry.MultipleTelemetry;
 import com.arcrobotics.ftclib.controller.PIDController;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -14,18 +15,30 @@ import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
-@TeleOp(name = "balanced", group = "TELE")
+@TeleOp(name = "balanced", group = "A1")
 
 public class BAL extends LinearOpMode {
 
     private PIDController controller;
-    public static double p = 0.0096, i = 0.03, d = 0.000525;
+    public static double p = 0.0036, i = 0.03, d = 0.000525;
     public static double f = 0.08;
-    public static int target = 0;
+
+
+    public static int target;
+    //public int target;
+
+
+    private PIDController controller1;
+    public static double p1 = 0.008, i1 = 0, d1 = 0;
+    public static double f1 = 0.2;
+
+
+    public static int target1;
 
     private final double ticks_in_degrees = 1425.1/360.0; //change the 360 back to 180 if no work
 
     private DcMotorEx motor ;
+    private DcMotorEx uppies ;
 
 
     boolean slowMode = false;
@@ -41,29 +54,41 @@ public class BAL extends LinearOpMode {
         DcMotor frontRightMotor = hardwareMap.dcMotor.get("fR");
         DcMotor backRightMotor = hardwareMap.dcMotor.get("bR");
 
-        DcMotor uppies = hardwareMap.dcMotor.get("uppies");
+        //Drivetrain drivetrain = new Drivetrain(hardwareMap);
+        //drivetrain.setForwardspeed(100);
 
-        Servo link = hardwareMap.servo.get("link");
+
+        Servo linkL = hardwareMap.servo.get("linkL");
+        Servo linkR = hardwareMap.servo.get("linkR");
+
 
         Servo inY = hardwareMap.servo.get("inY");
         Servo inX = hardwareMap.servo.get("inX");
         Servo inClaw = hardwareMap.servo.get("inClaw");
-        Servo inmainPiv = hardwareMap.servo.get("inmainPiv");
+        Servo inPiv = hardwareMap.servo.get("inPiv");
 
+        //set target to zero here
 
         controller = new PIDController(p,i,d);
         telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
 
-        motor = hardwareMap.get(DcMotorEx.class, "motor");
+        controller1 = new PIDController(p1,i1,d1);
+        telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
 
-        Servo outY = hardwareMap.servo.get("outY");
+        motor = hardwareMap.get(DcMotorEx.class, "Arm");
+        uppies = hardwareMap.get(DcMotorEx.class,"uppies");
+
         Servo outRot = hardwareMap.servo.get("outRot");
         Servo outClaw = hardwareMap.servo.get("outClaw");
 
-        link.setDirection(Servo.Direction.REVERSE);
+        linkR.setDirection(Servo.Direction.REVERSE);
 
         frontRightMotor.setDirection(DcMotorSimple.Direction.REVERSE);
         backRightMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        outRot.setDirection(Servo.Direction.REVERSE);
+
+
 
 
         // Retrieve the IMU from the hardware map
@@ -92,16 +117,11 @@ public class BAL extends LinearOpMode {
             if (gamepad1.options) {
                 imu.resetYaw();
             }
-            if (Math.abs(gamepad2.left_stick_y) > 0.1){
-                uppies.setPower(gamepad2.left_stick_y * 0.8);
-            } else {
-                uppies.setPower(0);
-                uppies.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-            }
+
             double botHeading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS);
-            if (Math.abs(gamepad2.left_stick_x) > 0.1) {
+            if (Math.abs(gamepad2.right_stick_x) > 0.1) {
                 // Map joystick input (-1 to 1) to servo range (0 to 1)
-                double servoPosition = (1-(gamepad2.left_stick_x + 1) / 2);
+                double servoPosition = (1-(gamepad2.right_stick_x + 1) / 2);
 
                 // Set the servo position
                 inX.setPosition(servoPosition);
@@ -109,31 +129,28 @@ public class BAL extends LinearOpMode {
                 // Optional: Keep the servo in a neutral position or maintain its current state
                 inX.setPosition(0.5); // Set to neutral if joystick is idle
             }
-            if (gamepad2.a) {
-                inmainPiv.setPosition(0.5);
-                link.setPosition(0.23);
-                inY.setPosition(0.45);//lower claw to "observe mode"
-            }
 
-            if (gamepad2.b){
-                link.setPosition(0.62); // bring intake back
-                inY.setPosition(0.55);//bring claw back
-            }
+
+
+
+
 
 
 
             if (gamepad2.right_bumper){
-                outClaw.setPosition(0.5);
-                inClaw.setPosition(0.43);
+                outClaw.setPosition(0.35);
+                inClaw.setPosition(0.3);
             }
 
             if (gamepad2.left_bumper) {
 
-                inY.setPosition(0.36);//lower claw to ground-level
-                sleep(400);
-                inClaw.setPosition(0.57);//close claw
+                inY.setPosition(0.16);//lower claw to ground-level
+                inPiv.setPosition(0.2);
             }
 
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             controller.setPID(p,i,d);
             int armPos = motor.getCurrentPosition();
             double pid = controller.calculate(armPos, target);
@@ -141,72 +158,126 @@ public class BAL extends LinearOpMode {
 
             double power = pid + ff;
 
+            controller1.setPID(p1,i1,d1);
+            int armPos1 = uppies.getCurrentPosition();
+            double pid1 = controller1.calculate(armPos1, target1);
+            double ff1 = Math.cos(Math.toRadians(target1/ticks_in_degrees)) * f1;
+
+            double power1 = pid1 + ff1;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            if (gamepad2.a) {
+                inPiv.setPosition(0.15);
+                inY.setPosition(0.25);//lower claw to "observe mode"
+                linkL.setPosition(0.25);
+                linkR.setPosition(0.25);
+            }
+
+            if (gamepad2.b){
+                inY.setPosition(0.7);//bring claw back
+                inPiv.setPosition(0.4);
+                linkL.setPosition(0.56);
+                linkR.setPosition(0.56);
+            }
+
+            if (gamepad2.x){
+                outRot.setPosition(0.32);
+
+                target1 = 1020;
+                target = -1100;
+                outClaw.setPosition(0.5);
+                inY.setPosition(0.5);//bring claw back
+                inPiv.setPosition(0);
+                linkL.setPosition(0.53);
+                linkR.setPosition(0.53);
+                inClaw.setPosition(0.51);//close claw
+            }
+
+            if (gamepad2.y){
+                inClaw.setPosition(0.4);
+                outClaw.setPosition(0.65);
+                sleep(100);
+                outRot.setPosition(0.32);
+
+                target1 = 2300;
+                target = -400;
+            }
+
+
+            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+            if (gamepad2.right_stick_button){
+
+                motor.setPower(0);
+                uppies.setPower(0);
+                motor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+                uppies.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+                motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+                uppies.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
+
+            }
+
+
+            if (gamepad2.left_stick_button){
+                inClaw.setPosition(0.51);//close claw
+                //target = target + 2;
+            }
+
+
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             if (gamepad2.dpad_down){
-                outY.setPosition(0.4);
-                outRot.setPosition(0.27);
-                target = -25;
+                outRot.setPosition(0.32);
+                target = 0;
+                target1 = -40;
+
             }
 
 
             if (gamepad2.dpad_left){
-                outClaw.setPosition(0.72);
+                outClaw.setPosition(0.68);
                 sleep(450);
-                target = -400;
-                outY.setPosition(0.6);
-                outRot.setPosition(0.95);
+                target = -475;
+                outRot.setPosition(0.97);
             }
 
             if (gamepad2.dpad_up){
-                outClaw.setPosition(0.72);
-                target = -600; // changed
-                outY.setPosition(0.63);
-                outRot.setPosition(0.95);
+                outClaw.setPosition(0.68);
+                target = -850; // changed
+                outRot.setPosition(0.97);
             }
 
             if (gamepad2.dpad_right){
-                outClaw.setPosition(0.72);
-                target = -690; // changed
-                outY.setPosition(0.63);
-                outRot.setPosition(0.95);
+                outRot.setPosition(0.32);
+
+                outClaw.setPosition(0.68);
+                target = -750; // changed
             }
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-            if (gamepad2.x){
-                link.setPosition(0.35); // Set to neutral if joystick is idle
-                inmainPiv.setPosition(0.5);
-                inY.setPosition(0.95);//bring claw back
-                outClaw.setPosition(0.5);
-
-                outY.setPosition(1);
-                outRot.setPosition(0.95);
-                target = -555;
-
-            }
-
-
-            if (gamepad2.y){
-            outClaw.setPosition(0.72);
-            sleep(100);
-            inClaw.setPosition(0.43);
-                outY.setPosition(0.4);
-
-                target = -500;
-
-
-            }
 
 
 
 
             //main code here
             motor.setPower(power); //setting the motor to the desired position
+            uppies.setPower(power1); //setting the motor to the desired position
+
 
             telemetry.addData("pos ", armPos);
             telemetry.addData("target ", target);
+            telemetry.addData("slides pos ", armPos1);
+            telemetry.addData("slides target ", target1);
             telemetry.update();
 
-            double y = gamepad1.left_stick_y *  0.8; // Remember, Y stick value is reversed
-            double x = -gamepad1.left_stick_x  * 0.8;
-            double rx = -gamepad1.right_stick_x * 0.8;
+            double y = gamepad1.left_stick_y *  1; // Remember, Y stick value is reversed
+            double x = -gamepad1.left_stick_x  * 1;
+            double rx = -gamepad1.right_stick_x * 1;
             y *= powerFactor;
             x *= powerFactor;
             rx *= powerFactor;
